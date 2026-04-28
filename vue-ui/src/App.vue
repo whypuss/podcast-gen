@@ -32,6 +32,8 @@ const loading      = ref(false)
 const modelReady   = ref<boolean | null>(null)
 const modelError   = ref('')
 const result       = ref<any>(null)
+const jobId        = ref<string | null>(null)
+const pollTimer    = ref<number | null>(null)
 
 // ── 計算 ───────────────────────────────────────────────────────────────────
 const audioUrl = computed(() => {
@@ -67,10 +69,11 @@ checkModel()
 async function generate() {
   loading.value = true
   result.value = null
+  jobId.value  = null
+
   try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 120000)
-    const r = await fetch(`${API_BASE}/generate`, {
+    // Step 1: 立即提交 job
+    const submit = await fetch(`${API_BASE}/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -80,13 +83,37 @@ async function generate() {
         male_voice:   maleVoice.value,
         female_voice: femaleVoice.value,
       }),
-      signal: controller.signal,
     })
-    clearTimeout(timeout)
-    result.value = JSON.parse(await r.text())
+    const meta = JSON.parse(await submit.text())
+    jobId.value = meta.job_id
+    if (!jobId.value) throw new Error('無 job_id')
+
+    // Step 2: 輪詢 job 狀態
+    const poll = async () => {
+      try {
+        const r = await fetch(`${API_BASE}/jobs/${jobId.value}`)
+        const data = JSON.parse(await r.text())
+        if (data.status === 'done') {
+          result.value = data
+          loading.value = false
+          if (pollTimer.value) clearInterval(pollTimer.value)
+        } else if (data.status === 'failed') {
+          result.value = { success: false, error: data.error }
+          loading.value = false
+          if (pollTimer.value) clearInterval(pollTimer.value)
+        }
+        // else: still running, keep polling
+      } catch (e) {
+        // 輪詢出錯，繼續試
+      }
+    }
+
+    // 立即查一次，之後每 3 秒
+    await poll()
+    pollTimer.value = window.setInterval(poll, 3000)
+
   } catch (e: any) {
-    result.value = { success: false, error: e?.message || '請求失敗' }
-  } finally {
+    result.value = { success: false, error: e?.message || '提交失敗' }
     loading.value = false
   }
 }
