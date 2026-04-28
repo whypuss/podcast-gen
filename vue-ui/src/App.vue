@@ -346,6 +346,37 @@ async function generate() {
 .panel-left { border-right: 1px solid #2a2d3a; }
 .panel-right { background: #13151f; }
 
+/* ── Mobile (≤768px) ───────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .header { padding: 14px 16px; }
+  .title { font-size: 18px; }
+  .status-bar { padding: 8px 16px; font-size: 12px; }
+
+  .main {
+    grid-template-columns: 1fr;
+  }
+
+  .panel { padding: 16px; }
+  .panel-left { border-right: none; border-bottom: 1px solid #2a2d3a; }
+  .panel-right { background: #0f1117; }
+
+  .textarea { font-size: 13px; min-height: 160px; }
+
+  .format-guide { font-size: 12px; }
+  .format-table { display: block; overflow-x: auto; }
+  .format-table th, .format-table td { white-space: nowrap; }
+
+  .voice-cards { flex-direction: row; flex-wrap: wrap; }
+  .voice-card { flex: 1 1 calc(50% - 3px); min-width: 120px; }
+
+  .controls { flex-direction: column; align-items: stretch; }
+  .control-item { justify-content: space-between; }
+  .range { width: 100%; }
+  .btn-generate { width: 100%; text-align: center; }
+
+  .seg-voice { display: none; }
+}
+
 /* ── Labels ─────────────────────────────────────────────────────── */
 .label {
   display: block;

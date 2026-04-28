@@ -4,7 +4,7 @@
 
 | 層面 | 技術 |
 |------|------|
-| TTS 引擎 | sherpa-onnx 1.12+ (本地推理) |
+| TTS 引擎 | qwen3 tts（本地推理） |
 | 後端 | Python FastAPI |
 | 前端 | SolidJS + Vite |
 | 桌面封裝 | Tauri |
@@ -31,7 +31,7 @@
 podcast-gen/
 ├── backend/
 │   ├── main.py              # FastAPI 入口
-│   ├── tts_engine.py        # Sherpa-ONNX TTS 封裝
+│   ├── qwen3_tts_engine.py  # Qwen3 TTS 封裝
 │   ├── script_parser.py     # 腳本解析（[男][女] 標籤）
 │   ├── audio_merger.py      # FFmpeg 合併音頻片段
 │   ├── models/              # ONNX 模型文件
