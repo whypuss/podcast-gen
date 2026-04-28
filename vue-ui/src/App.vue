@@ -5,15 +5,15 @@ const API_BASE = 'http://100.77.249.63:5174'
 
 // ── 音色定義 ────────────────────────────────────────────────────────────────
 const MALE_VOICES = [
-  { id: 'uncle_fu', label: 'Uncle Fu — 沉穩大叔' },
-  { id: 'dylan',    label: 'Dylan — 京腔青年' },
-  { id: 'eric',     label: 'Eric — 活潑四川' },
+  { id: 'uncle_fu', label: 'Uncle Fu', sub: '沉穩大叔' },
+  { id: 'dylan',    label: 'Dylan',    sub: '京腔青年' },
+  { id: 'eric',     label: 'Eric',     sub: '活潑四川' },
 ]
 
 const FEMALE_VOICES = [
-  { id: 'vivian',   label: 'Vivian — 亮麗女聲' },
-  { id: 'serena',   label: 'Serena — 溫柔女生' },
-  { id: 'ono_anna', label: 'Ono Anna — 日語女聲' },
+  { id: 'vivian',   label: 'Vivian',   sub: '亮麗女聲' },
+  { id: 'serena',   label: 'Serena',   sub: '溫柔女生' },
+  { id: 'ono_anna', label: 'Ono Anna', sub: '日語女聲' },
 ]
 
 // ── 預設腳本 ────────────────────────────────────────────────────────────────
@@ -23,15 +23,15 @@ const SAMPLE_SCRIPT = `[男] 大家好，歡迎收聽今天的 Podcast。
 [女] 東京呀！我也想去的，有什麼必去的地方推薦嗎？`
 
 // ── 狀態 ───────────────────────────────────────────────────────────────────
-const script      = ref(SAMPLE_SCRIPT)
-const maleVoice   = ref('uncle_fu')
-const femaleVoice = ref('vivian')
-const language    = ref('mandarin')
-const speed       = ref(1.0)
-const loading     = ref(false)
-const modelReady  = ref<boolean | null>(null)  // null = checking
-const modelError  = ref('')
-const result      = ref<any>(null)
+const script       = ref(SAMPLE_SCRIPT)
+const maleVoice    = ref('uncle_fu')
+const femaleVoice  = ref('vivian')
+const language     = ref('mandarin')
+const speed        = ref(1.0)
+const loading      = ref(false)
+const modelReady   = ref<boolean | null>(null)
+const modelError   = ref('')
+const result       = ref<any>(null)
 
 // ── 計算 ───────────────────────────────────────────────────────────────────
 const audioUrl = computed(() => {
@@ -40,15 +40,11 @@ const audioUrl = computed(() => {
   return `${API_BASE}/download/${fname}`
 })
 
-// ── 發音性別說明文字 ──────────────────────────────────────────────────────
 function voiceOf(seg: any) {
   if (seg.speaker === 'male') {
-    const v = MALE_VOICES.find(v => v.id === seg.voice)
-    return v ? v.label : seg.voice
-  } else {
-    const v = FEMALE_VOICES.find(v => v.id === seg.voice)
-    return v ? v.label : seg.voice
+    return MALE_VOICES.find(v => v.id === seg.voice)?.sub ?? seg.voice
   }
+  return FEMALE_VOICES.find(v => v.id === seg.voice)?.sub ?? seg.voice
 }
 
 // ── 鉤子 ───────────────────────────────────────────────────────────────────
@@ -58,49 +54,37 @@ async function checkModel() {
     const timeout = setTimeout(() => controller.abort(), 8000)
     const r = await fetch(`${API_BASE}/models/status`, { signal: controller.signal })
     clearTimeout(timeout)
-    const text = await r.text()
-    console.log('[API] /models/status status:', r.status, 'body:', text.slice(0, 200))
-    const d = JSON.parse(text)
+    const d = JSON.parse(await r.text())
     modelReady.value = d.loaded
     modelError.value = d.error || ''
   } catch (e: any) {
-    console.error('[API] /models/status error:', e)
     modelReady.value = false
-    if (e.name === 'AbortError') {
-      modelError.value = '請求超時，請檢查網絡連接'
-    } else {
-      modelError.value = '無法連接後端：' + (e.message || String(e))
-    }
+    modelError.value = e.name === 'AbortError' ? '請求超時，請檢查網絡連接' : '無法連接後端'
   }
 }
-
 checkModel()
 
-// ── 生成 ───────────────────────────────────────────────────────────────────
 async function generate() {
   loading.value = true
   result.value = null
   try {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 120000) // 2min for TTS
+    const timeout = setTimeout(() => controller.abort(), 120000)
     const r = await fetch(`${API_BASE}/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        script:        script.value,
-        language:      language.value,
-        speed:         speed.value,
-        male_voice:    maleVoice.value,
-        female_voice:  femaleVoice.value,
+        script:       script.value,
+        language:     language.value,
+        speed:        speed.value,
+        male_voice:   maleVoice.value,
+        female_voice: femaleVoice.value,
       }),
       signal: controller.signal,
     })
     clearTimeout(timeout)
-    const text = await r.text()
-    console.log('[API] /generate status:', r.status, 'body:', text.slice(0, 300))
-    result.value = JSON.parse(text)
+    result.value = JSON.parse(await r.text())
   } catch (e: any) {
-    console.error('[API] /generate error:', e)
     result.value = { success: false, error: e?.message || '請求失敗' }
   } finally {
     loading.value = false
@@ -110,190 +94,239 @@ async function generate() {
 
 <template>
   <div class="app">
+
     <!-- Header -->
     <header class="header">
       <div class="header-inner">
-        <h1 class="title">🎙️ Podcast Gen</h1>
-        <p class="subtitle">Qwen3-TTS · 中文普通話 / 粵語 · 多音色選擇</p>
+        <div class="header-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3Z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" x2="12" y1="19" y2="22"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="title">Podcast Gen</h1>
+          <p class="subtitle">Qwen3-TTS · 普通話 / 粵語 · 多音色</p>
+        </div>
       </div>
     </header>
 
     <!-- Model Status -->
     <div class="status-bar">
-      <span v-if="modelReady === true" class="status-ok">✅ TTS 模型已就緒</span>
-      <span v-else-if="modelReady === false" class="status-err">⚠️ {{ modelError || '模型載入中...' }}</span>
-      <span v-else class="status-check">🔄 連接中...</span>
+      <div v-if="modelReady === true" class="status status-ok">
+        <span class="dot dot-green"></span> TTS 模型已就緒
+      </div>
+      <div v-else-if="modelReady === false" class="status status-err">
+        <span class="dot dot-orange"></span> {{ modelError || '模型載入中...' }}
+      </div>
+      <div v-else class="status status-check">
+        <span class="dot dot-gray"></span> 連接中...
+      </div>
     </div>
 
-    <!-- Main Layout -->
+    <!-- Main -->
     <main class="main">
-      <!-- 左欄：編輯器 -->
+
+      <!-- 左欄：腳本 -->
       <section class="panel panel-left">
-        <label class="label">📝 Podcast 腳本</label>
+        <div class="section-label">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+          Podcast 腳本
+        </div>
         <textarea
           v-model="script"
           class="textarea"
-          rows="16"
+          rows="10"
           placeholder="[男] 文字&#10;[女] 文字&#10;&#10;或指定音色：&#10;[男:uncle_fu] 文字&#10;[女:serena] 文字"
           spellcheck="false"
         ></textarea>
 
         <!-- 格式說明 -->
-        <div class="format-guide">
-          <div class="format-title">📖 腳本格式說明</div>
-          <table class="format-table">
-            <thead>
-              <tr><th>格式</th><th>說明</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><code>[男]</code></td>
-                <td>男生說話（使用左側選擇的男聲）</td>
-              </tr>
-              <tr>
-                <td><code>[男:音色名]</code></td>
-                <td>指定某位男生音色，如 <code>[男:dylan]</code></td>
-              </tr>
-              <tr>
-                <td><code>[女]</code></td>
-                <td>女生說話（使用左側選擇的女聲）</td>
-              </tr>
-              <tr>
-                <td><code>[女:音色名]</code></td>
-                <td>指定某位女生音色，如 <code>[女:serena]</code></td>
-              </tr>
-            </tbody>
-          </table>
-
-          <div class="voice-ref">
-            <div class="voice-ref-title">🎤 可用音色參考</div>
-            <div class="voice-group">
-              <span class="voice-tag tag-m">男聲</span>
-              <code>uncle_fu</code> 沉穩大叔 ·
-              <code>dylan</code> 京腔青年 ·
-              <code>eric</code> 活潑四川
-            </div>
-            <div class="voice-group">
-              <span class="voice-tag tag-f">女聲</span>
-              <code>vivian</code> 亮麗女聲 ·
-              <code>serena</code> 溫柔女生 ·
-              <code>ono_anna</code> 日語女聲
+        <details class="format-guide">
+          <summary>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            腳本格式說明
+          </summary>
+          <div class="guide-body">
+            <table class="guide-table">
+              <thead><tr><th>格式</th><th>說明</th></tr></thead>
+              <tbody>
+                <tr><td><code>[男]</code></td><td>男生說話（左側選擇的男聲）</td></tr>
+                <tr><td><code>[男:音色名]</code></td><td>指定男聲，如 <code>[男:dylan]</code></td></tr>
+                <tr><td><code>[女]</code></td><td>女生說話（左側選擇的女聲）</td></tr>
+                <tr><td><code>[女:音色名]</code></td><td>指定女聲，如 <code>[女:serena]</code></td></tr>
+              </tbody>
+            </table>
+            <div class="voice-ref">
+              <div class="ref-row">
+                <span class="ref-tag tag-m">男</span>
+                <code>uncle_fu</code> 沉穩大叔 ·
+                <code>dylan</code> 京腔青年 ·
+                <code>eric</code> 活潑四川
+              </div>
+              <div class="ref-row">
+                <span class="ref-tag tag-f">女</span>
+                <code>vivian</code> 亮麗女聲 ·
+                <code>serena</code> 溫柔女生 ·
+                <code>ono_anna</code> 日語女聲
+              </div>
             </div>
           </div>
-        </div>
+        </details>
       </section>
 
       <!-- 右欄：設定 -->
       <section class="panel panel-right">
-        <!-- 音色選擇 -->
-        <div class="voice-section">
-          <div class="voice-col">
-            <label class="label">👨 男聲</label>
-            <div class="voice-cards">
-              <label
-                v-for="v in MALE_VOICES"
-                :key="v.id"
-                class="voice-card"
-                :class="{ active: maleVoice === v.id }"
-              >
-                <input type="radio" :value="v.id" v-model="maleVoice" class="hidden-radio" />
-                <span class="voice-icon">🎙️</span>
-                <span class="voice-name">{{ v.label.split(' — ')[0] }}</span>
-                <span class="voice-desc">{{ v.label.split(' — ')[1] }}</span>
-              </label>
-            </div>
-          </div>
 
-          <div class="voice-col">
-            <label class="label">👩 女聲</label>
-            <div class="voice-cards">
-              <label
-                v-for="v in FEMALE_VOICES"
-                :key="v.id"
-                class="voice-card"
-                :class="{ active: femaleVoice === v.id }"
-              >
-                <input type="radio" :value="v.id" v-model="femaleVoice" class="hidden-radio" />
-                <span class="voice-icon">🎙️</span>
-                <span class="voice-name">{{ v.label.split(' — ')[0] }}</span>
-                <span class="voice-desc">{{ v.label.split(' — ')[1] }}</span>
-              </label>
-            </div>
+        <!-- 男聲選擇 -->
+        <div class="voice-group">
+          <div class="section-label">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+            男聲
+          </div>
+          <div class="voice-cards">
+            <label
+              v-for="v in MALE_VOICES"
+              :key="v.id"
+              class="voice-card"
+              :class="{ active: maleVoice === v.id }"
+            >
+              <input type="radio" :value="v.id" v-model="maleVoice" class="hidden-radio" />
+              <div class="card-icon card-icon-m">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+              </div>
+              <div class="card-text">
+                <span class="card-name">{{ v.label }}</span>
+                <span class="card-sub">{{ v.sub }}</span>
+              </div>
+              <div v-if="maleVoice === v.id" class="card-check">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- 女聲選擇 -->
+        <div class="voice-group">
+          <div class="section-label">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+            女聲
+          </div>
+          <div class="voice-cards">
+            <label
+              v-for="v in FEMALE_VOICES"
+              :key="v.id"
+              class="voice-card"
+              :class="{ active: femaleVoice === v.id }"
+            >
+              <input type="radio" :value="v.id" v-model="femaleVoice" class="hidden-radio" />
+              <div class="card-icon card-icon-f">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+              </div>
+              <div class="card-text">
+                <span class="card-name">{{ v.label }}</span>
+                <span class="card-sub">{{ v.sub }}</span>
+              </div>
+              <div v-if="femaleVoice === v.id" class="card-check">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+            </label>
           </div>
         </div>
 
         <!-- 控制項 -->
         <div class="controls">
-          <label class="control-item">
-            <span class="control-label">🌐 語言</span>
+
+          <div class="control-row">
+            <label class="control-label">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              語言
+            </label>
             <select v-model="language" class="select">
               <option value="mandarin">普通話</option>
               <option value="cantonese">粵語</option>
             </select>
-          </label>
+          </div>
 
-          <label class="control-item">
-            <span class="control-label">⏱️ 語速 {{ speed.toFixed(1) }}x</span>
-            <input
-              type="range"
-              min="0.5"
-              max="2.0"
-              step="0.1"
-              v-model.number="speed"
-              class="range"
-            />
-          </label>
+          <div class="control-row">
+            <label class="control-label">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              語速 {{ speed.toFixed(1) }}x
+            </label>
+            <input type="range" min="0.5" max="2.0" step="0.1" v-model.number="speed" class="range" />
+          </div>
 
-          <button
-            class="btn-generate"
-            :disabled="loading || modelReady !== true"
-            @click="generate"
-          >
-            <span v-if="loading">🔄 生成中...</span>
-            <span v-else>🎙️ 生成 Podcast</span>
-          </button>
         </div>
+
+        <!-- 生成按鈕 -->
+        <button class="btn-generate" :disabled="loading || modelReady !== true" @click="generate">
+          <svg v-if="!loading" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+          {{ loading ? '生成中...' : '生成 Podcast' }}
+        </button>
 
         <!-- 結果 -->
         <div v-if="result" class="result-area">
+
           <div class="result-header">
-            <span :class="result.success ? 'badge badge-ok' : 'badge badge-err'">
-              {{ result.success ? '✅ 成功' : '❌ 失敗' }}
-            </span>
+            <div v-if="result.success" class="badge badge-ok">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              成功
+            </div>
+            <div v-else class="badge badge-err">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+              失敗
+            </div>
             <span class="job-id">Job #{{ result.job_id }}</span>
           </div>
 
-          <!-- 錯誤 -->
           <div v-if="result.error" class="error-box">{{ result.error }}</div>
 
-          <!-- 完整音頻 -->
-          <div v-if="result.output_path" class="audio-section">
-            <label class="label">🎧 完整 Podcast</label>
+          <div v-if="result.output_path" class="audio-block">
+            <div class="audio-label">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+              完整 Podcast
+            </div>
             <audio :src="audioUrl!" controls class="audio-player"></audio>
-            <a :href="audioUrl!" download class="download-btn">⬇️ 下載 MP3</a>
+            <a :href="audioUrl!" download class="btn-download">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+              下載 MP3
+            </a>
           </div>
 
-          <!-- 分段列表 -->
-          <div class="segments">
-            <label class="label">📋 分段結果 ({{ result.segments?.length ?? 0 }} 段)</label>
+          <div v-if="result.segments?.length" class="segments-block">
+            <div class="audio-label">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
+              分段結果 ({{ result.segments.length }} 段)
+            </div>
             <div
               v-for="(seg, i) in result.segments"
               :key="i"
               class="seg-item"
-              :style="{ borderLeft: seg.speaker === 'male' ? '3px solid #4a9eff' : '3px solid #ff6b9d' }"
+              :class="seg.speaker === 'male' ? 'seg-m' : 'seg-f'"
             >
-              <span class="seg-speaker">{{ seg.speaker === 'male' ? '👨' : '👩' }}</span>
-              <span class="seg-voice">({{ voiceOf(seg) }})</span>
-              <span class="seg-text">{{ seg.text }}</span>
-              <span v-if="!seg.success" class="seg-fail">❌</span>
-              <a
-                v-else
-                :href="`${API_BASE}/download/${seg.audio_path?.split('/').pop()}`"
-                target="_blank"
-                class="seg-play"
-              >▶</a>
+              <div class="seg-meta">
+                <div class="seg-avatar" :class="seg.speaker === 'male' ? 'avatar-m' : 'avatar-f'">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+                </div>
+                <span class="seg-voice">{{ voiceOf(seg) }}</span>
+                <a
+                  v-if="seg.success"
+                  :href="`${API_BASE}/download/${seg.audio_path?.split('/').pop()}`"
+                  target="_blank"
+                  class="seg-play"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                </a>
+                <span v-else class="seg-fail">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" x2="9" y1="9" y2="15"/><line x1="9" x2="15" y1="9" y2="15"/></svg>
+                </span>
+              </div>
+              <div class="seg-text">{{ seg.text }}</div>
             </div>
           </div>
+
         </div>
       </section>
     </main>
@@ -301,232 +334,417 @@ async function generate() {
 </template>
 
 <style>
-/* ── Reset & Base ──────────────────────────────────────────────── */
+/* ── iOS System Font Variables ─────────────────────────────────────────── */
+:root {
+  --ios-bg:       #f2f2f7;
+  --ios-card:     #ffffff;
+  --ios-border:   rgba(0,0,0,0.06);
+  --ios-text:     #1c1c1e;
+  --ios-text-2:   #3c3c43;
+  --ios-text-3:   #8e8e93;
+  --ios-blue:     #007aff;
+  --ios-green:    #34c759;
+  --ios-red:      #ff3b30;
+  --ios-orange:   #ff9500;
+  --ios-pink:     #ff2d55;
+  --ios-purple:   #af52de;
+  --ios-shadow:   0 1px 3px rgba(0,0,0,0.08);
+  --ios-radius:   12px;
+  --ios-radius-sm: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', sans-serif;
+  font-size: 16px;
+  color-scheme: light;
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 .app {
-  font-family: system-ui, -apple-system, sans-serif;
-  background: #0f1117;
-  color: #e0e0e0;
+  background: var(--ios-bg);
   min-height: 100vh;
+  color: var(--ios-text);
 }
 
-/* ── Header ─────────────────────────────────────────────────────── */
+/* ── Header ──────────────────────────────────────────────────────────── */
 .header {
-  background: #1a1d27;
-  border-bottom: 1px solid #2a2d3a;
-  padding: 20px 32px;
+  background: var(--ios-card);
+  border-bottom: 1px solid var(--ios-border);
+  padding: 16px 20px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
-.header-inner { max-width: 1400px; margin: 0 auto; }
-.title { font-size: 22px; font-weight: 700; color: #fff; }
-.subtitle { font-size: 13px; color: #888; margin-top: 2px; }
+.header-inner {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.header-icon {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, var(--ios-blue), var(--ios-purple));
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+}
+.title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ios-text);
+  letter-spacing: -0.3px;
+}
+.subtitle {
+  font-size: 12px;
+  color: var(--ios-text-3);
+  margin-top: 1px;
+}
 
-/* ── Status Bar ────────────────────────────────────────────────── */
+/* ── Status Bar ─────────────────────────────────────────────────────── */
 .status-bar {
-  padding: 10px 32px;
-  background: #1a1d27;
-  border-bottom: 1px solid #2a2d3a;
+  padding: 10px 20px;
+  background: var(--ios-card);
+  border-bottom: 1px solid var(--ios-border);
+}
+.status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 13px;
 }
-.status-ok  { color: #4ade80; }
-.status-err { color: #f97316; }
-.status-check { color: #60a5fa; }
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dot-green  { background: var(--ios-green); }
+.dot-orange { background: var(--ios-orange); }
+.dot-gray   { background: var(--ios-text-3); }
+.status-ok  { color: var(--ios-green); }
+.status-err { color: var(--ios-orange); }
+.status-check { color: var(--ios-text-3); }
 
-/* ── Main Layout ───────────────────────────────────────────────── */
+/* ── Main Layout ─────────────────────────────────────────────────────── */
 .main {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  max-width: 1400px;
+  max-width: 900px;
   margin: 0 auto;
   min-height: calc(100vh - 120px);
 }
 
-/* ── Panels ─────────────────────────────────────────────────────── */
-.panel { padding: 24px 28px; }
-.panel-left { border-right: 1px solid #2a2d3a; }
-.panel-right { background: #13151f; }
-
-/* ── Mobile (≤768px) ───────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .header { padding: 14px 16px; }
-  .title { font-size: 18px; }
-  .status-bar { padding: 8px 16px; font-size: 12px; }
-
-  .main {
-    grid-template-columns: 1fr;
-  }
-
-  .panel { padding: 16px; }
-  .panel-left { border-right: none; border-bottom: 1px solid #2a2d3a; }
-  .panel-right { background: #0f1117; }
-
-  .textarea { font-size: 13px; min-height: 160px; }
-
-  .format-guide { font-size: 12px; }
-  .format-table { display: block; overflow-x: auto; }
-  .format-table th, .format-table td { white-space: nowrap; }
-
-  .voice-cards { flex-direction: row; flex-wrap: wrap; }
-  .voice-card { flex: 1 1 calc(50% - 3px); min-width: 120px; }
-
-  .controls { flex-direction: column; align-items: stretch; }
-  .control-item { justify-content: space-between; }
-  .range { width: 100%; }
-  .btn-generate { width: 100%; text-align: center; }
-
-  .seg-voice { display: none; }
+/* ── Panels ──────────────────────────────────────────────────────────── */
+.panel {
+  padding: 20px;
+}
+.panel-left {
+  background: var(--ios-bg);
+  border-right: 1px solid var(--ios-border);
+}
+.panel-right {
+  background: var(--ios-card);
 }
 
-/* ── Labels ─────────────────────────────────────────────────────── */
-.label {
-  display: block;
+/* ── Section Label ───────────────────────────────────────────────────── */
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 13px;
   font-weight: 600;
-  color: #aaa;
-  margin-bottom: 8px;
-  margin-top: 16px;
+  color: var(--ios-text-2);
+  margin-bottom: 10px;
+  margin-top: 4px;
+  color: var(--ios-text-3);
 }
+.section-label svg { color: var(--ios-text-3); }
 
-/* ── Textarea ──────────────────────────────────────────────────── */
+/* ── Textarea ───────────────────────────────────────────────────────── */
 .textarea {
   width: 100%;
-  background: #1a1d27;
-  border: 1px solid #2a2d3a;
-  border-radius: 8px;
-  color: #e0e0e0;
+  background: var(--ios-card);
+  border: 1px solid var(--ios-border);
+  border-radius: var(--ios-radius);
+  color: var(--ios-text);
   font-size: 14px;
-  font-family: monospace;
+  font-family: 'SF Mono', ui-monospace, monospace;
   padding: 12px;
   resize: vertical;
   outline: none;
-  line-height: 1.6;
+  line-height: 1.7;
+  box-shadow: var(--ios-shadow);
+  transition: border-color 0.2s;
 }
-.textarea:focus { border-color: #4a9eff; }
+.textarea:focus {
+  border-color: var(--ios-blue);
+}
 
-/* ── Format Guide ──────────────────────────────────────────────── */
+/* ── Format Guide ────────────────────────────────────────────────────── */
 .format-guide {
-  margin-top: 16px;
-  background: #1a1d27;
-  border: 1px solid #2a2d3a;
-  border-radius: 8px;
-  padding: 14px;
+  margin-top: 12px;
+  background: var(--ios-card);
+  border: 1px solid var(--ios-border);
+  border-radius: var(--ios-radius);
+  overflow: hidden;
+  box-shadow: var(--ios-shadow);
+}
+.format-guide summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 11px 14px;
   font-size: 13px;
+  font-weight: 500;
+  color: var(--ios-text-3);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
 }
-.format-title { font-weight: 600; color: #aaa; margin-bottom: 10px; }
-.format-table { width: 100%; border-collapse: collapse; }
-.format-table th, .format-table td {
-  text-align: left;
-  padding: 5px 8px;
-  border-bottom: 1px solid #2a2d3a;
-}
-.format-table th { color: #888; font-weight: 600; }
-.format-table code { color: #4ade80; font-size: 12px; background: #0f1117; padding: 1px 5px; border-radius: 4px; }
-
-.voice-ref { margin-top: 12px; }
-.voice-ref-title { font-weight: 600; color: #aaa; margin-bottom: 6px; }
-.voice-group { font-size: 12px; color: #888; margin-bottom: 4px; }
-.voice-group code { color: #4a9eff; font-size: 11px; background: #0f1117; padding: 1px 4px; border-radius: 3px; }
-.voice-tag {
+.format-guide summary::-webkit-details-marker { display: none; }
+.format-guide summary::after { content: '▶'; font-size: 9px; color: var(--ios-text-3); margin-left: auto; transition: transform 0.2s; }
+.format-guide[open] summary::after { transform: rotate(90deg); }
+.guide-body { padding: 4px 14px 14px; }
+.guide-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.guide-table th, .guide-table td { text-align: left; padding: 5px 4px; border-bottom: 1px solid var(--ios-border); }
+.guide-table th { color: var(--ios-text-3); font-weight: 500; }
+.guide-table code { color: var(--ios-blue); background: rgba(0,122,255,0.08); padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+.voice-ref { margin-top: 10px; }
+.ref-row { font-size: 12px; color: var(--ios-text-3); margin-bottom: 4px; }
+.ref-row code { color: var(--ios-blue); background: rgba(0,122,255,0.08); padding: 1px 4px; border-radius: 3px; font-size: 11px; }
+.ref-tag {
   display: inline-block;
   font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 10px;
-  font-weight: 700;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
   margin-right: 4px;
 }
-.tag-m { background: #1a2a3a; color: #4a9eff; }
-.tag-f { background: #2a1a2a; color: #ff6b9d; }
+.tag-m { background: rgba(0,122,255,0.12); color: var(--ios-blue); }
+.tag-f { background: rgba(255,45,85,0.12); color: var(--ios-pink); }
 
-/* ── Voice Cards ───────────────────────────────────────────────── */
-.voice-section { display: flex; flex-direction: column; gap: 16px; }
-.voice-col { }
+/* ── Voice Cards ─────────────────────────────────────────────────────── */
+.voice-group { margin-bottom: 20px; }
 .voice-cards { display: flex; flex-direction: column; gap: 6px; }
 .voice-card {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 12px;
-  background: #1a1d27;
-  border: 1.5px solid #2a2d3a;
-  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--ios-card);
+  border: 1.5px solid var(--ios-border);
+  border-radius: var(--ios-radius);
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-shadow: var(--ios-shadow);
 }
-.voice-card:hover { border-color: #555; background: #20232e; }
-.voice-card.active { border-color: #4a9eff; background: #1a2a3e; }
+.voice-card:hover { border-color: rgba(0,122,255,0.4); }
+.voice-card.active { border-color: var(--ios-blue); background: rgba(0,122,255,0.04); }
 .hidden-radio { display: none; }
-.voice-icon { font-size: 16px; }
-.voice-name { font-weight: 600; font-size: 13px; min-width: 80px; }
-.voice-desc { font-size: 12px; color: #888; }
-
-/* ── Controls ──────────────────────────────────────────────────── */
-.controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-top: 16px; }
-.control-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #aaa; }
-.control-label { white-space: nowrap; }
-.select {
-  background: #1a1d27;
-  border: 1px solid #2a2d3a;
-  border-radius: 6px;
-  color: #e0e0e0;
-  padding: 4px 8px;
-  font-size: 13px;
-}
-.range { accent-color: #4a9eff; width: 100px; }
-.btn-generate {
-  background: #4a9eff;
-  border: none;
+.card-icon {
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.card-icon-m { background: rgba(0,122,255,0.1); color: var(--ios-blue); }
+.card-icon-f { background: rgba(255,45,85,0.1); color: var(--ios-pink); }
+.card-text { display: flex; flex-direction: column; gap: 1px; flex: 1; }
+.card-name { font-size: 14px; font-weight: 600; color: var(--ios-text); }
+.card-sub  { font-size: 12px; color: var(--ios-text-3); }
+.card-check {
+  width: 22px;
+  height: 22px;
+  background: var(--ios-blue);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  padding: 10px 22px;
-  cursor: pointer;
-  transition: opacity 0.2s;
+  flex-shrink: 0;
 }
-.btn-generate:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* ── Result Area ──────────────────────────────────────────────── */
+/* ── Controls ───────────────────────────────────────────────────────── */
+.controls { display: flex; flex-direction: column; gap: 12px; margin: 16px 0; }
+.control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.control-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ios-text-2);
+  white-space: nowrap;
+  color: var(--ios-text-3);
+}
+.select {
+  background: var(--ios-bg);
+  border: 1px solid var(--ios-border);
+  border-radius: var(--ios-radius-sm);
+  color: var(--ios-text);
+  padding: 6px 10px;
+  font-size: 14px;
+  outline: none;
+  font-family: inherit;
+}
+.range {
+  flex: 1;
+  accent-color: var(--ios-blue);
+  height: 4px;
+  cursor: pointer;
+}
+
+/* ── Generate Button ─────────────────────────────────────────────────── */
+.btn-generate {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--ios-blue);
+  border: none;
+  border-radius: var(--ios-radius);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  padding: 14px;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  font-family: inherit;
+  letter-spacing: -0.2px;
+}
+.btn-generate:active { transform: scale(0.98); }
+.btn-generate:disabled { opacity: 0.45; cursor: not-allowed; }
+.spin { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Result ──────────────────────────────────────────────────────────── */
 .result-area { margin-top: 20px; }
-.result-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-.badge { padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: 600; }
-.badge-ok  { background: #1a3a2a; color: #4ade80; }
-.badge-err { background: #3a1a1a; color: #f87171; }
-.job-id { font-size: 12px; color: #666; font-family: monospace; }
+.result-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.badge-ok  { background: rgba(52,199,89,0.12); color: var(--ios-green); }
+.badge-err { background: rgba(255,59,48,0.12); color: var(--ios-red); }
+.job-id { font-size: 12px; color: var(--ios-text-3); font-family: monospace; }
 .error-box {
-  background: #3a1a1a;
-  color: #f87171;
+  background: rgba(255,59,48,0.08);
+  color: var(--ios-red);
   padding: 12px;
-  border-radius: 8px;
+  border-radius: var(--ios-radius);
   font-size: 13px;
   margin-bottom: 12px;
 }
-.audio-section { margin-bottom: 12px; }
-.audio-player { width: 100%; height: 40px; margin-top: 4px; }
-.download-btn {
-  display: inline-block;
-  background: #4ade80;
-  color: #000;
-  padding: 6px 14px;
-  border-radius: 6px;
-  text-decoration: none;
-  font-size: 13px;
-  font-weight: 600;
-  margin-top: 6px;
-}
-.segments { margin-top: 8px; }
-.seg-item {
+
+/* ── Audio Block ─────────────────────────────────────────────────────── */
+.audio-block { margin-bottom: 16px; }
+.audio-label {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 6px;
-  padding: 8px 12px;
-  background: #1a1d27;
-  border-radius: 6px;
-  margin-bottom: 5px;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ios-text-3);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
-.seg-speaker { font-weight: 600; min-width: 24px; }
-.seg-voice { font-size: 11px; color: #888; min-width: 100px; }
-.seg-text { flex: 1; color: #ccc; }
-.seg-fail { font-size: 12px; }
-.seg-play { font-size: 12px; text-decoration: none; padding: 2px 6px; }
+.audio-player {
+  width: 100%;
+  height: 40px;
+  border-radius: var(--ios-radius);
+  accent-color: var(--ios-blue);
+}
+.btn-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 7px 14px;
+  background: var(--ios-bg);
+  border: 1px solid var(--ios-border);
+  border-radius: var(--ios-radius-sm);
+  color: var(--ios-blue);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+.btn-download:hover { background: rgba(0,122,255,0.06); }
+
+/* ── Segments ────────────────────────────────────────────────────────── */
+.segments-block { }
+.seg-item {
+  background: var(--ios-bg);
+  border-radius: var(--ios-radius);
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  border-left: 3px solid transparent;
+}
+.seg-m { border-left-color: var(--ios-blue); }
+.seg-f { border-left-color: var(--ios-pink); }
+.seg-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.seg-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.avatar-m { background: rgba(0,122,255,0.12); color: var(--ios-blue); }
+.avatar-f { background: rgba(255,45,85,0.12); color: var(--ios-pink); }
+.seg-voice { font-size: 12px; color: var(--ios-text-3); flex: 1; }
+.seg-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: var(--ios-blue);
+  color: #fff;
+  border-radius: 50%;
+  text-decoration: none;
+}
+.seg-fail { color: var(--ios-red); display: flex; align-items: center; }
+.seg-text { font-size: 14px; color: var(--ios-text); line-height: 1.5; }
+
+/* ── Mobile ──────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .main { grid-template-columns: 1fr; }
+  .panel-left { border-right: none; border-bottom: 1px solid var(--ios-border); }
+  .header { padding: 12px 16px; }
+  .panel { padding: 16px; }
+  .textarea { font-size: 13px; min-height: 140px; }
+  .voice-cards { gap: 5px; }
+  .btn-generate { padding: 12px; }
+}
 </style>
