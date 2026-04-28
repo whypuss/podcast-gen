@@ -1,0 +1,32 @@
+# Python / venv
+.venv/
+.venv-tts/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Node
+node_modules/
+
+# Model cache (downloaded at runtime)
+models/
+*.bin
+*.safetensors
+*.pt
+*.onnx
+
+# Output
+outputs/
+/tmp/podcast-gen/
+
+# Build artifacts
+dist/
+build/
+*.egg/
+
+# Logs
+*.log
+*.log.*
+
+# macOS
+.DS_Store
